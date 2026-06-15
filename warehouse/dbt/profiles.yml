@@ -1,0 +1,25 @@
+# Profil dbt-duckdb.
+#
+# DuckDB lit directement les Parquet du data lake MinIO via l'extension httpfs
+# (API S3). La base DuckDB est un fichier local `finhub.duckdb`.
+#
+# Les secrets S3 viennent de l'environnement (voir .env) :
+#   S3_ENDPOINT_URL, S3_ACCESS_KEY, S3_SECRET_KEY
+#
+# Équivalent Snowflake : ce profil remplace un profil snowflake (account/user/
+# warehouse/database). Les modèles SQL restent identiques.
+
+finhub:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: "{{ env_var('DBT_DUCKDB_PATH', 'finhub.duckdb') }}"
+      extensions:
+        - httpfs
+      settings:
+        s3_endpoint: "{{ env_var('S3_ENDPOINT_HOST', 'localhost:9000') }}"
+        s3_access_key_id: "{{ env_var('S3_ACCESS_KEY', 'minioadmin') }}"
+        s3_secret_access_key: "{{ env_var('S3_SECRET_KEY', 'minioadmin') }}"
+        s3_use_ssl: false
+        s3_url_style: path

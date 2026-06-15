@@ -1,0 +1,38 @@
+version: 2
+
+models:
+  - name: stg_trades
+    description: "Trades Silver typés"
+    columns:
+      - name: symbol
+        tests: [not_null]
+      - name: price
+        tests: [not_null]
+      - name: event_time
+        tests: [not_null]
+
+  - name: fact_trades
+    description: "Faits : un enregistrement par trade"
+    columns:
+      - name: symbol
+        tests: [not_null]
+      - name: price
+        tests: [not_null]
+      - name: trade_date
+        tests: [not_null]
+
+  - name: dim_symbol
+    description: "Dimension symbole"
+    columns:
+      - name: symbol
+        tests: [not_null, unique]
+
+  - name: agg_stock_metrics
+    description: "Métriques par symbole/jour"
+    columns:
+      - name: symbol
+        tests: [not_null]
+      - name: date
+        tests: [not_null]
+      - name: total_volume
+        tests: [not_null]
