@@ -1,0 +1,13 @@
+version: 2
+
+sources:
+  - name: lake
+    description: "Data lake S3/MinIO (couches Silver/Gold en Parquet)"
+    meta:
+      external_location: "s3://datalake"
+    tables:
+      - name: silver_trades
+        description: "Trades nettoyés (couche Silver)"
+        meta:
+          # Lecture de tous les Parquet trades, toutes dates confondues
+          s3_glob: "s3://datalake/silver/trades/*/trades.parquet"

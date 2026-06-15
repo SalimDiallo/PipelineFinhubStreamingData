@@ -22,6 +22,14 @@ data_lake/gold/
 # Airflow (runtime)
 airflow/logs/
 
+# dbt (runtime)
+warehouse/dbt/.venv/
+warehouse/dbt/target/
+warehouse/dbt/dbt_packages/
+warehouse/dbt/logs/
+warehouse/dbt/*.duckdb
+warehouse/dbt/.user.yml
+
 # Divers
 .DS_Store
 *.log

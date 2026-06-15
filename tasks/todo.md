@@ -65,8 +65,18 @@
 - [x] DAG validé par parsing (Airflow 2.10.3, venv py3.12 jetable) + callables validés sur réel
 - [x] README airflow, .gitignore airflow/logs/
 
+## Étape 4 — Modélisation dbt — EN COURS (branche feature/etape4)
+- Décision : DuckDB + dbt-duckdb (gratuit, local, lit les Parquet Gold via S3/MinIO)
+  au lieu de Snowflake (payant). Structure warehouse/dbt/ conforme à l'archi.
+- [ ] deps : dbt-duckdb
+- [ ] warehouse/dbt/ : dbt_project.yml, profiles.yml (duckdb + httpfs vers MinIO)
+- [ ] models/staging/stg_trades.sql (lecture parquet silver)
+- [ ] models/marts/ : fact_trades, dim_symbol, agg_stock_metrics
+- [ ] tests/schema.yml
+- [ ] dbt parse + dbt run + dbt test (run réel)
+- [ ] brancher dans le DAG (remplacer placeholder load_snowflake)
+
 ## Étapes suivantes
-- Étape 4 : Snowflake + dbt (implémenter load_snowflake + modèles dbt)
 - Étape 5 : Docker (infra globale + conteneuriser le producteur streaming)
 
 ## Étapes suivantes
