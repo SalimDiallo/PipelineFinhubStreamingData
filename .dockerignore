@@ -1,0 +1,14 @@
+.venv/
+**/.venv/
+__pycache__/
+**/__pycache__/
+*.pyc
+.git/
+.env
+data_lake/
+airflow/logs/
+warehouse/dbt/target/
+warehouse/dbt/*.duckdb
+tasks/
+*.md
+notebooks/

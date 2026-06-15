@@ -43,5 +43,40 @@ services:
       echo 'Bucket ${S3_BUCKET:-datalake} prêt'
       "
 
+  # Producteur streaming Finnhub -> Kafka (conteneurisé)
+  producer:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+    image: finhub-pipeline:latest
+    container_name: finhub-producer
+    env_file: ../.env
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    command: ["python", "-m", "ingestion.run_ingestion"]
+    networks: [default, kafka]
+    restart: unless-stopped
+
+  # Consumer trades : Kafka -> S3 Bronze (streaming continu)
+  consumer-trades:
+    image: finhub-pipeline:latest
+    container_name: finhub-consumer-trades
+    env_file: ../.env
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      S3_ENDPOINT_URL: http://minio:9000
+    command: ["python", "-m", "consumers.consumer_trades"]
+    depends_on:
+      - producer
+      - minio
+    networks: [default, kafka]
+    restart: unless-stopped
+
+networks:
+  default:
+  kafka:
+    external: true
+    name: kafka_default
+
 volumes:
   minio_data:

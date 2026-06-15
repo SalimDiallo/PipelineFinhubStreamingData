@@ -75,8 +75,16 @@
 - [x] dbt_build validé via Airflow (PASS=4 run, PASS=11 test) contre MinIO
 - [x] DAG complet validé : consume -> silver -> gold -> dbt_build
 
-## Étapes suivantes
-- Étape 5 : Docker (infra globale + conteneuriser le producteur streaming)
+## Étape 5 — Infrastructure Docker — TERMINÉE (branche feature/etape5)
+- [x] infra/Dockerfile : image finhub-pipeline (py3.14 + uv, ingestion/consumers/transformations)
+- [x] infra/docker-compose.yml : MinIO + producer + consumer-trades conteneurisés (réseaux kafka/infra)
+- [x] Makefile racine : make up/down/ps/topics/logs/clean (orchestre les 3 stacks)
+- [x] .dockerignore
+- [x] Image construite, producer+consumer démarrent et se connectent à Kafka+MinIO (validé)
+- [!] Écriture MinIO bloquée par disque hôte plein (XMinioStorageFull) — limite env, pas un bug
+- [x] README infra
+
+## PROJET COMPLET : étapes 1->5 (ingestion, stockage, orchestration, modélisation, infra)
 
 ## Étapes suivantes
 - Étape 3 : Airflow
