@@ -65,8 +65,17 @@
 - [x] DAG validé par parsing (Airflow 2.10.3, venv py3.12 jetable) + callables validés sur réel
 - [x] README airflow, .gitignore airflow/logs/
 
+## Étape 4 — Modélisation dbt — TERMINÉE (branche feature/etape4)
+- Décision : DuckDB + dbt-duckdb (gratuit/local) au lieu de Snowflake (payant)
+- [x] dbt isolé en venv py3.12 (dbt-core ne supporte pas py3.14)
+- [x] warehouse/dbt/ : dbt_project.yml, profiles.yml (duckdb + httpfs MinIO)
+- [x] stg_trades + marts (fact_trades, dim_symbol, agg_stock_metrics) + tests
+- [x] dbt run (4 modèles) + dbt test (11 tests) PASS en local
+- [x] DAG : tâche dbt_build (run+test) remplace load_snowflake ; dbt-duckdb dans l'image Airflow
+- [x] dbt_build validé via Airflow (PASS=4 run, PASS=11 test) contre MinIO
+- [x] DAG complet validé : consume -> silver -> gold -> dbt_build
+
 ## Étapes suivantes
-- Étape 4 : Snowflake + dbt (implémenter load_snowflake + modèles dbt)
 - Étape 5 : Docker (infra globale + conteneuriser le producteur streaming)
 
 ## Étapes suivantes

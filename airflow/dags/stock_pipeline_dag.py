@@ -62,9 +62,38 @@ def transform_gold() -> None:
     features.main(date)
 
 
-def load_snowflake() -> None:
-    """Placeholder : chargement Gold -> Snowflake (Étape 4)."""
-    print("⏭️  load_snowflake : à implémenter à l'Étape 4 (Snowflake + dbt)")
+def dbt_build() -> None:
+    """
+    Modélisation analytique : dbt run + dbt test (Étape 4).
+
+    dbt-duckdb est installé dans l'image Airflow (_PIP_ADDITIONAL_REQUIREMENTS).
+    Les modèles lisent les Parquet Silver depuis MinIO via DuckDB (httpfs).
+
+    En local hors Airflow, dbt tourne dans son venv isolé warehouse/dbt/.venv
+    (Python 3.12, car dbt-core ne supporte pas encore Python 3.14).
+    """
+    import os
+    import subprocess
+    import sys
+
+    dbt_dir = "/opt/project/warehouse/dbt"
+
+    env = os.environ.copy()
+    env["DBT_PROFILES_DIR"] = dbt_dir
+    # La base DuckDB est écrite dans /tmp (warehouse/dbt monté en lecture seule
+    # côté image, et évite de polluer le repo).
+    env["DBT_DUCKDB_PATH"] = "/tmp/finhub.duckdb"
+    # DuckDB httpfs attend host:port (sans schéma) ; déduit de S3_ENDPOINT_URL
+    endpoint = os.getenv("S3_ENDPOINT_URL", "http://minio:9000")
+    env["S3_ENDPOINT_HOST"] = endpoint.replace("http://", "").replace("https://", "")
+
+    for cmd in (["run"], ["test"]):
+        subprocess.run(
+            [sys.executable, "-m", "dbt.cli.main", *cmd],
+            cwd=dbt_dir,
+            env=env,
+            check=True,
+        )
 
 
 # -------------------------
@@ -78,7 +107,7 @@ default_args = {
 
 with DAG(
     dag_id="stock_pipeline",
-    description="Batch : Kafka -> Bronze -> Silver -> Gold -> Snowflake",
+    description="Batch : Kafka -> Bronze -> Silver -> Gold -> dbt (DuckDB)",
     default_args=default_args,
     start_date=datetime(2026, 6, 1),
     schedule="@hourly",
@@ -88,6 +117,6 @@ with DAG(
     t_consume = PythonOperator(task_id="consume_to_s3", python_callable=consume_to_s3)
     t_silver = PythonOperator(task_id="transform_silver", python_callable=transform_silver)
     t_gold = PythonOperator(task_id="transform_gold", python_callable=transform_gold)
-    t_load = PythonOperator(task_id="load_snowflake", python_callable=load_snowflake)
+    t_dbt = PythonOperator(task_id="dbt_build", python_callable=dbt_build)
 
-    t_consume >> t_silver >> t_gold >> t_load
+    t_consume >> t_silver >> t_gold >> t_dbt

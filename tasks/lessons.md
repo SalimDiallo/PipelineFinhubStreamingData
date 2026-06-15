@@ -23,3 +23,7 @@
 [2026-06-15] | KafkaConsumer en mode batch borné (run_once) : avec un consumer_timeout_ms court, le 1er poll déclenche un rebalance plus long que le timeout -> RebalanceInProgressError, 0 message. | Faire un `consumer.poll(timeout_ms=3000)` initial pour forcer l'assignation des partitions avant la boucle d'itération, et traiter les messages déjà renvoyés.
 
 [2026-06-15] | Recréer le conteneur Kafka (changement de config listeners) a réinitialisé le cluster KRaft -> topics perdus, et le groupe consumer avait des offsets avancés (LAG=0) suite aux tests en échec. | Après recreate Kafka : relancer create_topics.sh. Pour rejouer une consommation : reset offsets `kafka-consumer-groups.sh --reset-offsets --to-earliest --execute`.
+
+[2026-06-15] | dbt-core ne supporte pas Python 3.14 (crash mashumaro UnserializableField). Et un venv n'est pas portable hôte<->conteneur (pyvenv.cfg pointe l'interpréteur en absolu). | Isoler dbt dans un venv py3.12 dédié pour l'usage local ; pour Airflow, installer dbt-duckdb dans l'image et l'appeler via `python -m dbt.cli.main` (pas le venv hôte monté).
+
+[2026-06-15] | dbt-duckdb peut lire un data lake S3/MinIO directement via l'extension httpfs (read_parquet('s3://...')), sans charger les données. Profil : settings s3_endpoint (host:port sans schéma), s3_url_style=path, s3_use_ssl=false. | Bonne alternative gratuite/locale à Snowflake pour la modélisation dbt sur des Parquet.
