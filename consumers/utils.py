@@ -122,6 +122,11 @@ def consume_to_bronze(topic: str, dataset: str, run_once: bool = False) -> int:
     print(f"🟤 Consumer Bronze démarré | topic={topic} -> dataset={dataset}")
     print(f"   bucket s3://{S3_BUCKET} | batch={BATCH_SIZE} timeout={BATCH_TIMEOUT_S}s")
 
+    # Force l'assignation des partitions avant la boucle batch : rejoindre le
+    # groupe peut déclencher un rebalance plus long que consumer_timeout_ms.
+    # Les messages éventuellement déjà renvoyés par ce poll sont traités ici.
+    initial = consumer.poll(timeout_ms=3000)
+
     batch: list[dict] = []
     total = 0
 
@@ -135,9 +140,17 @@ def consume_to_bronze(topic: str, dataset: str, run_once: bool = False) -> int:
         print(f"   💾 {len(batch)} messages -> s3://{S3_BUCKET}/{key} (total={total})")
         batch = []
 
+    # Amorce le batch avec les messages déjà retournés par le poll initial
+    for records in initial.values():
+        for message in records:
+            batch.append(message.value)
+            if len(batch) >= BATCH_SIZE:
+                flush()
+
     try:
         while True:
-            got_message = False
+            got_message = bool(initial)
+            initial = {}  # ne compte qu'une fois
             # consumer_timeout_ms fait sortir l'itérateur après inactivité
             for message in consumer:
                 got_message = True

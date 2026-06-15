@@ -15,3 +15,11 @@
 [2026-06-15] | Dans un `resample(...).agg(col=(c, lambda s: ...))`, le lambda ne reçoit QUE la série de la colonne agrégée : `g.loc[s.index, 'autre_col']` ne s'aligne pas et donne des résultats faux (VWAP 5min = 1.6M au lieu de 65k). | Pour une agrégation multi-colonnes par fenêtre (ex. VWAP = prix pondéré par volume), utiliser `resample(...).apply(fn)` où `fn(window_df)` reçoit tout le sous-DataFrame de la fenêtre.
 
 [2026-06-15] | Un message de test injecté manuellement (symbol 'TEST', timestamp en secondes) a pollué tout le pipeline jusqu'au Gold (epoch s pris pour ms -> date 1970). | Ne pas injecter de données de test dans les topics/buckets réels. Si nécessaire, utiliser un symbole/préfixe dédié et nettoyer après.
+
+[2026-06-15] | Airflow en Docker : 3 pièges au lancement. (1) PermissionError sur /opt/airflow/logs -> définir `user: "<UID_hôte>:0"` + chown du dossier. (2) `getpwuid uid not found` -> NE PAS override `entrypoint`, passer la commande via l'entrypoint officiel (il crée l'entrée passwd). (3) deps projet absentes -> `_PIP_ADDITIONAL_REQUIREMENTS`. | Toujours vérifier `docker ps` pour les ports déjà pris (8081 l'était) avant de mapper.
+
+[2026-06-15] | Depuis un conteneur, joindre Kafka via la gateway hôte (advertised `localhost:9092`) donne ECONNREFUSED : le broker renvoie une adresse advertised non joignable. | Mettre les conteneurs sur un réseau docker partagé (réseaux `external`) et utiliser le listener INTERNAL (`kafka:29092`, `minio:9000`). Plus fiable que host.docker.internal sur Linux.
+
+[2026-06-15] | KafkaConsumer en mode batch borné (run_once) : avec un consumer_timeout_ms court, le 1er poll déclenche un rebalance plus long que le timeout -> RebalanceInProgressError, 0 message. | Faire un `consumer.poll(timeout_ms=3000)` initial pour forcer l'assignation des partitions avant la boucle d'itération, et traiter les messages déjà renvoyés.
+
+[2026-06-15] | Recréer le conteneur Kafka (changement de config listeners) a réinitialisé le cluster KRaft -> topics perdus, et le groupe consumer avait des offsets avancés (LAG=0) suite aux tests en échec. | Après recreate Kafka : relancer create_topics.sh. Pour rejouer une consommation : reset offsets `kafka-consumer-groups.sh --reset-offsets --to-earliest --execute`.
