@@ -34,3 +34,6 @@ warehouse/dbt/.user.yml
 .DS_Store
 *.log
 .ipynb_checkpoints/
+
+# IDE
+.vscode/
