@@ -94,13 +94,17 @@ def write_batch_jsonl(s3, dataset: str, records: list[dict]) -> str | None:
 # -------------------------
 # Boucle de consommation générique
 # -------------------------
-def consume_to_bronze(topic: str, dataset: str) -> None:
+def consume_to_bronze(topic: str, dataset: str, run_once: bool = False) -> int:
     """
     Consomme un topic Kafka et écrit les messages en S3 Bronze par micro-batch.
 
     Un batch est flush dès que `BATCH_SIZE` messages sont accumulés OU après
     `BATCH_TIMEOUT_S` secondes d'inactivité. Les offsets ne sont commités
     qu'après écriture réussie dans S3 (livraison at-least-once).
+
+    - run_once=False (défaut) : streaming continu (Ctrl+C pour arrêter).
+    - run_once=True : draine les messages disponibles puis s'arrête (mode batch,
+      utilisé par Airflow). Retourne le nombre total de messages écrits.
     """
     s3 = get_s3_client()
     ensure_bucket(s3)
@@ -142,6 +146,9 @@ def consume_to_bronze(topic: str, dataset: str) -> None:
                     flush()
             # Timeout atteint : flush du batch partiel
             flush()
+            if run_once:
+                # Mode batch : on s'arrête une fois le topic drainé
+                break
             if not got_message:
                 # Aucun message sur cette fenêtre, on reboucle (poll suivant)
                 continue
@@ -151,3 +158,5 @@ def consume_to_bronze(topic: str, dataset: str) -> None:
         flush()
         consumer.close()
         print(f"✅ Consumer fermé | {total} messages écrits au total")
+
+    return total
