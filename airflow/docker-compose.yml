@@ -12,7 +12,12 @@
 
 x-airflow-common: &airflow-common
   image: apache/airflow:2.10.3-python3.12
+  # UID hôte pour aligner les permissions sur les volumes montés (logs, dags)
+  user: "${AIRFLOW_UID:-1000}:0"
   environment: &airflow-env
+    # Home explicite : permet à un UID arbitraire (non présent dans /etc/passwd)
+    # de trouver son répertoire et évite getpwuid() KeyError
+    HOME: /home/airflow
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
     AIRFLOW__CORE__LOAD_EXAMPLES: "false"
@@ -21,9 +26,9 @@ x-airflow-common: &airflow-common
     PYTHONPATH: /opt/project
     # Deps du projet installées dans l'image au démarrage (boto3, pandas, kafka...)
     _PIP_ADDITIONAL_REQUIREMENTS: ${_PIP_ADDITIONAL_REQUIREMENTS:-boto3>=1.34.0 kafka-python>=3.0.0 pandas>=2.2.0 pyarrow>=15.0.0 numpy>=1.26.0 python-dotenv>=1.0.0 finnhub-python>=2.4.28 websocket-client>=1.7.0 requests>=2.31.0}
-    # Connexions vers les services tournant sur l'hôte
-    KAFKA_BOOTSTRAP_SERVERS: host.docker.internal:9092
-    S3_ENDPOINT_URL: http://host.docker.internal:9000
+    # Connexions via les réseaux docker partagés (listeners internes)
+    KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    S3_ENDPOINT_URL: http://minio:9000
     S3_ACCESS_KEY: minioadmin
     S3_SECRET_KEY: minioadmin
     S3_BUCKET: datalake
@@ -35,8 +40,10 @@ x-airflow-common: &airflow-common
     - ./plugins:/opt/airflow/plugins
     - ./logs:/opt/airflow/logs
     - ..:/opt/project        # racine du projet (consumers/, transformations/, ingestion/)
-  extra_hosts:
-    - "host.docker.internal:host-gateway"
+  networks:
+    - default          # réseau airflow (postgres)
+    - kafka            # réseau de la stack Kafka
+    - infra            # réseau de MinIO
   depends_on: &airflow-deps
     postgres:
       condition: service_healthy
@@ -48,6 +55,8 @@ services:
       POSTGRES_USER: airflow
       POSTGRES_PASSWORD: airflow
       POSTGRES_DB: airflow
+    networks:
+      - default
     volumes:
       - airflow_pg:/var/lib/postgresql/data
     healthcheck:
@@ -58,8 +67,10 @@ services:
 
   airflow-init:
     <<: *airflow-common
-    entrypoint: /bin/bash
+    # Pas d'override d'entrypoint : l'entrypoint officiel crée l'entrée passwd
+    # pour l'UID arbitraire, puis exécute notre commande bash.
     command:
+      - bash
       - -c
       - |
         airflow db migrate &&
@@ -71,13 +82,22 @@ services:
     <<: *airflow-common
     command: webserver
     ports:
-      - "8081:8080"
+      - "8082:8080"
     restart: always
 
   airflow-scheduler:
     <<: *airflow-common
     command: scheduler
     restart: always
+
+networks:
+  default:
+  kafka:
+    external: true
+    name: kafka_default
+  infra:
+    external: true
+    name: infra_default
 
 volumes:
   airflow_pg:
