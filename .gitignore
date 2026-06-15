@@ -1,0 +1,25 @@
+# Secrets / env
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.python-version
+
+# uv
+# (uv.lock est versionné volontairement)
+
+# Data lake (données locales, non versionnées)
+data_lake/bronze/
+data_lake/silver/
+data_lake/gold/
+
+# Divers
+.DS_Store
+*.log
+.ipynb_checkpoints/

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Trade",
+  "description": "Transaction de marché en temps réel (Finnhub WebSocket, type=trade).",
+  "type": "object",
+  "properties": {
+    "symbol": { "type": "string", "description": "Ticker, ex: AAPL" },
+    "price": { "type": "number", "description": "Prix de la transaction" },
+    "volume": { "type": "number", "description": "Volume échangé" },
+    "timestamp": { "type": "integer", "description": "Epoch en millisecondes (UNIX)" },
+    "type": { "type": "string", "const": "trade" }
+  },
+  "required": ["symbol", "price", "volume", "timestamp", "type"],
+  "additionalProperties": false
+}
