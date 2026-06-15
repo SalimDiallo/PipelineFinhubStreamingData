@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Candle",
+  "description": "Chandelier OHLC (Finnhub REST /stock/candle, endpoint premium).",
+  "type": "object",
+  "properties": {
+    "symbol": { "type": "string", "description": "Ticker, ex: AAPL" },
+    "open": { "type": "number", "description": "Prix d'ouverture" },
+    "high": { "type": "number", "description": "Plus haut" },
+    "low": { "type": "number", "description": "Plus bas" },
+    "close": { "type": "number", "description": "Prix de clôture" },
+    "volume": { "type": "number", "description": "Volume agrégé" },
+    "timestamp": { "type": "integer", "description": "Epoch (UNIX)" },
+    "type": { "type": "string", "const": "candle" }
+  },
+  "required": ["symbol", "open", "high", "low", "close", "volume", "timestamp", "type"],
+  "additionalProperties": false
+}

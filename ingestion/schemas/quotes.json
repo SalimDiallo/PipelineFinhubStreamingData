@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Quote",
+  "description": "Cotation bid/ask (plan Finnhub payant requis pour le temps réel).",
+  "type": "object",
+  "properties": {
+    "symbol": { "type": "string", "description": "Ticker, ex: AAPL" },
+    "bid": { "type": "number", "description": "Meilleur prix acheteur" },
+    "ask": { "type": "number", "description": "Meilleur prix vendeur" },
+    "bidSize": { "type": "number", "description": "Volume au bid" },
+    "askSize": { "type": "number", "description": "Volume au ask" },
+    "timestamp": { "type": "integer", "description": "Epoch (UNIX)" },
+    "type": { "type": "string", "const": "quote" }
+  },
+  "required": ["symbol", "bid", "ask", "timestamp", "type"],
+  "additionalProperties": false
+}
