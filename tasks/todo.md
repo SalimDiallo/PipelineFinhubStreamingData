@@ -56,10 +56,18 @@
 
 ## Étape 2 COMPLÈTE : Bronze + Silver + Gold dans le data lake MinIO
 
+## Étape 3 — Orchestration Airflow — TERMINÉE (branche feature/etape3)
+- [x] Modèle : DAG batch périodique (@hourly), streaming Finnhub->Kafka reste hors Airflow
+- [x] Ajout mode run_once au consumer (drain batch puis stop)
+- [x] airflow/dags/stock_pipeline_dag.py : consume_to_s3 -> silver -> gold -> load_snowflake
+- [x] airflow/requirements.txt, plugins/, docker-compose.yml (LocalExecutor + Postgres)
+- [x] load_snowflake = placeholder (Étape 4)
+- [x] DAG validé par parsing (Airflow 2.10.3, venv py3.12 jetable) + callables validés sur réel
+- [x] README airflow, .gitignore airflow/logs/
+
 ## Étapes suivantes
-- Étape 3 : Airflow (orchestration du DAG fetch->kafka->bronze->silver->gold->snowflake)
-- Étape 4 : Snowflake + dbt
-- Étape 5 : Docker (infra globale)
+- Étape 4 : Snowflake + dbt (implémenter load_snowflake + modèles dbt)
+- Étape 5 : Docker (infra globale + conteneuriser le producteur streaming)
 
 ## Étapes suivantes
 - Étape 3 : Airflow
