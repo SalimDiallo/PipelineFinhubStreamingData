@@ -1,0 +1,47 @@
+# Déploiement de l'infra (hors Kafka, voir kafka/docker-compose.yml).
+# Data lake S3 via MinIO.
+#
+# Usage :
+#   docker compose -f infra/docker-compose.yml up -d
+#
+# Endpoints :
+#   - API S3        : http://localhost:9000  (boto3 / consumers)
+#   - Console web   : http://localhost:9001  (login: minioadmin / minioadmin)
+#
+# Le bucket du data lake est créé automatiquement par le service `minio-init`.
+
+services:
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"   # API S3
+      - "9001:9001"   # Console web
+    environment:
+      MINIO_ROOT_USER: "${MINIO_ROOT_USER:-minioadmin}"
+      MINIO_ROOT_PASSWORD: "${MINIO_ROOT_PASSWORD:-minioadmin}"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # Crée le bucket du data lake au démarrage (idempotent), puis se termine.
+  minio-init:
+    image: minio/mc:latest
+    container_name: minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 ${MINIO_ROOT_USER:-minioadmin} ${MINIO_ROOT_PASSWORD:-minioadmin} &&
+      mc mb --ignore-existing local/${S3_BUCKET:-datalake} &&
+      echo 'Bucket ${S3_BUCKET:-datalake} prêt'
+      "
+
+volumes:
+  minio_data:
