@@ -1,61 +1,54 @@
 # Stack Kafka
 
-Broker **Kafka en mode KRaft** (sans Zookeeper, déprécié depuis Kafka 3.x),
-image officielle `apache/kafka:3.9.0`, plus une **Kafka UI** pour la
-visualisation.
+Broker Kafka en mode KRaft (sans ZooKeeper, deprecie depuis Kafka 3.x), image
+officielle `apache/kafka`, accompagne d'une interface Kafka UI.
 
 ## Lancer
 
 ```bash
-docker compose -f kafka/docker-compose.yml up -d   # démarrer le broker + UI
-bash kafka/create_topics.sh                         # créer les topics
+docker compose -f kafka/docker-compose.yml up -d
+bash kafka/create_topics.sh
 ```
 
 ## Endpoints
 
 | Service | Adresse | Usage |
 | --- | --- | --- |
-| Broker (hôte) | `localhost:9092` | Producteurs/consommateurs Python |
-| Broker (interne) | `kafka:29092` | Autres conteneurs du réseau docker |
-| Kafka UI | http://localhost:8080 | Visualisation topics/messages |
+| Broker (hote) | `localhost:9092` | Producteurs / consommateurs locaux |
+| Broker (interne) | `kafka:29092` | Autres conteneurs du reseau docker |
+| Kafka UI | http://localhost:8080 | Visualisation des topics et messages |
 
 ## Topics
 
-Créés par `create_topics.sh` (3 partitions, replication 1 — mono-nœud) :
+Crees par `create_topics.sh` (3 partitions, replication 1) :
 
 - `stock.trades`
 - `stock.quotes`
 - `stock.candles`
 
-La key des messages est le `symbol` → ordre garanti par symbole sur une
+La cle des messages est le `symbol`, ce qui garantit l'ordre par symbole sur une
 partition.
 
 ## Commandes utiles
 
 ```bash
 # Lister les topics
-docker exec kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list
+docker exec kafka /opt/kafka/bin/kafka-topics.sh \
+  --bootstrap-server localhost:9092 --list
 
-# Lire un topic (key | value)
+# Lire un topic
 docker exec kafka /opt/kafka/bin/kafka-console-consumer.sh \
   --bootstrap-server localhost:9092 --topic stock.trades \
-  --from-beginning --property print.key=true --property key.separator=" | "
+  --from-beginning --property print.key=true
 
-# Nombre de messages par partition
+# Offsets par partition
 docker exec kafka /opt/kafka/bin/kafka-get-offsets.sh \
   --bootstrap-server localhost:9092 --topic stock.trades
 ```
 
-## Arrêter
+## Arreter
 
 ```bash
-docker compose -f kafka/docker-compose.yml down      # arrêter (garde les données)
-docker compose -f kafka/docker-compose.yml down -v   # arrêter + effacer le volume
+docker compose -f kafka/docker-compose.yml down       # garde les donnees
+docker compose -f kafka/docker-compose.yml down -v    # supprime le volume
 ```
-
-## Variables d'environnement du script
-
-`create_topics.sh` accepte (avec valeurs par défaut) :
-`KAFKA_CONTAINER=kafka`, `KAFKA_BOOTSTRAP=localhost:9092`,
-`KAFKA_PARTITIONS=3`, `KAFKA_REPLICATION=1`,
-`KAFKA_TOPICS_BIN=/opt/kafka/bin/kafka-topics.sh`.
