@@ -145,6 +145,8 @@ $\downarrow$ \\
 Couche Gold (métriques business) \\
 $\downarrow$ \\
 dbt / DuckDB (modèles analytiques) \\
+$\downarrow$ \\
+Dashboard BI (Streamlit) \\
 }}
 \end{center}
 
@@ -202,6 +204,7 @@ finHubPipeline/
 |-- airflow/            # DAG d'orchestration + stack Airflow
 |-- warehouse/dbt/      # modeles dbt (DuckDB)
 |-- infra/              # Dockerfile + MinIO + services conteneurises
+|-- dashboard/          # tableau de bord BI (Streamlit)
 |-- Makefile            # orchestration de toute l'infra
 `-- pyproject.toml      # dependances (uv)
 \end{lstlisting}
@@ -222,6 +225,7 @@ MinIO + \code{boto3} & Data lake compatible S3 \\
 \code{pandas}, \code{pyarrow} & Transformations Silver / Gold (Parquet) \\
 Apache Airflow & Orchestration du flux batch \\
 dbt + DuckDB & Modélisation analytique \\
+Streamlit + Plotly & Tableau de bord BI (restitution) \\
 Docker / Docker Compose & Conteneurisation et déploiement \\
 \bottomrule
 \end{tabularx}
@@ -496,6 +500,56 @@ s'agit d'une contrainte matérielle de l'environnement et non d'un défaut de la
 pipeline.
 
 % ==================================================================
+\section{Restitution — Dashboard BI}
+% ==================================================================
+
+\subsection{Objectif}
+
+Pour valoriser les données modélisées, un \textbf{tableau de bord interactif} a
+été développé avec \textbf{Streamlit}. Il offre une lecture immédiate des
+métriques de marché issues de la couche analytique, sans requête SQL manuelle.
+
+\subsection{Source de données}
+
+Le dashboard interroge directement la base \textbf{DuckDB} produite par dbt
+(\code{finhub.duckdb}), en \textbf{lecture seule}. Ce mode évite tout verrou en
+écriture et n'interfère donc pas avec les exécutions \code{dbt run}. Les
+requêtes sont mises en cache pour la réactivité.
+
+\subsection{Contenu}
+
+\begin{itemize}
+  \item \textbf{Indicateurs clés} (KPIs) : nombre de symboles suivis, total des
+        trades, volume total, volatilité moyenne ;
+  \item \textbf{Trades par symbole} et \textbf{volatilité par symbole}
+        (diagrammes à barres) ;
+  \item \textbf{Évolution du prix} dans le temps (courbes, à partir de
+        \code{fact\_trades}) ;
+  \item \textbf{Tableau détaillé} des métriques \code{agg\_stock\_metrics} ;
+  \item \textbf{Filtre} interactif par symbole.
+\end{itemize}
+
+Les visualisations sont réalisées avec Plotly et adoptent une palette en
+niveaux de gris, cohérente avec l'identité visuelle du projet.
+
+\subsection{Mise en route}
+
+\begin{lstlisting}
+make dashboard          # ou : uv run streamlit run dashboard/app.py
+# -> http://localhost:8501
+\end{lstlisting}
+
+Prérequis : les modèles dbt doivent avoir été construits (\code{dbt run}) afin
+que la base \code{finhub.duckdb} existe.
+
+\subsection{Validation}
+
+Le serveur Streamlit démarre correctement (réponse HTTP~200 sur le point de
+santé) et les visualisations s'alimentent des données réelles de la couche
+analytique (par exemple quatre symboles suivis et plusieurs centaines de trades
+agrégés).
+
+% ==================================================================
 \section{Démarche d'ingénierie}
 % ==================================================================
 
@@ -558,7 +612,8 @@ Le projet met en œuvre une pipeline de données \textbf{complète et fonctionne
 du streaming temps réel jusqu'à la modélisation analytique. Les cinq étapes ont
 été réalisées et validées : ingestion Finnhub vers Kafka, stockage en data lake
 structuré en trois couches, orchestration par Airflow, modélisation dbt, et
-conteneurisation Docker.
+conteneurisation Docker. Un tableau de bord interactif (Streamlit) assure enfin
+la restitution des métriques analytiques.
 
 Au-delà de la simple réalisation, la démarche a privilégié la \textbf{rigueur
 d'ingénierie} : décisions de conception explicites et justifiées, validation par
