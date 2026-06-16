@@ -1,0 +1,570 @@
+\documentclass[11pt,a4paper]{article}
+
+% ------------------------------------------------------------------
+% Encodage & langue
+% ------------------------------------------------------------------
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage{lmodern}
+
+% ------------------------------------------------------------------
+% Mise en page sobre
+% ------------------------------------------------------------------
+\usepackage[a4paper,margin=2.5cm]{geometry}
+\usepackage{microtype}
+\usepackage{setspace}
+\onehalfspacing
+
+% ------------------------------------------------------------------
+% Couleurs minimales (niveaux de gris uniquement)
+% ------------------------------------------------------------------
+\usepackage{xcolor}
+\definecolor{gris}{gray}{0.45}
+\definecolor{grisclair}{gray}{0.92}
+\definecolor{grisfonce}{gray}{0.20}
+
+% ------------------------------------------------------------------
+% Tableaux, listings, liens
+% ------------------------------------------------------------------
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{enumitem}
+\setlist{itemsep=2pt,topsep=3pt}
+
+\usepackage{listings}
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  backgroundcolor=\color{grisclair},
+  frame=single,
+  rulecolor=\color{gris},
+  framerule=0.3pt,
+  breaklines=true,
+  showstringspaces=false,
+  columns=fullflexible,
+  keepspaces=true,
+  xleftmargin=4pt,
+  xrightmargin=4pt,
+  aboveskip=8pt,
+  belowskip=8pt,
+}
+
+\usepackage[hidelinks]{hyperref}
+\hypersetup{
+  colorlinks=true,
+  linkcolor=grisfonce,
+  urlcolor=grisfonce,
+  citecolor=grisfonce,
+}
+
+% ------------------------------------------------------------------
+% En-têtes / pieds de page
+% ------------------------------------------------------------------
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0.3pt}
+\renewcommand{\footrulewidth}{0pt}
+\lhead{\small\color{gris} Pipeline de données en temps réel}
+\rhead{\small\color{gris} FinHub Pipeline}
+\cfoot{\small\color{gris}\thepage}
+
+% Titres de section discrets
+\usepackage{titlesec}
+\titleformat{\section}{\Large\bfseries\color{grisfonce}}{\thesection}{0.6em}{}
+\titleformat{\subsection}{\large\bfseries\color{grisfonce}}{\thesubsection}{0.6em}{}
+\titleformat{\subsubsection}{\normalsize\bfseries\color{grisfonce}}{\thesubsubsection}{0.6em}{}
+
+% Commande pour les chemins / identifiants
+\newcommand{\code}[1]{\texttt{\small #1}}
+
+% ==================================================================
+\begin{document}
+% ==================================================================
+
+% ------------------------------------------------------------------
+% Page de titre sobre
+% ------------------------------------------------------------------
+\begin{titlepage}
+\centering
+\vspace*{3cm}
+
+{\color{gris}\rule{\linewidth}{0.4pt}}\\[0.6cm]
+{\Huge\bfseries\color{grisfonce} Pipeline de données\\[0.2cm] en temps réel}\\[0.5cm]
+{\large\color{gris} Données du marché boursier : de l'ingestion à la modélisation analytique}\\[0.4cm]
+{\color{gris}\rule{\linewidth}{0.4pt}}\\[1.5cm]
+
+{\large\textbf{FinHub Streaming Data Pipeline}}\\[0.3cm]
+{\normalsize\color{gris} Finnhub $\rightarrow$ Kafka $\rightarrow$ Data Lake $\rightarrow$ dbt}\\[3cm]
+
+\begin{tabular}{rl}
+\textbf{Auteur} & Salim Diallo \\[4pt]
+\textbf{Dépôt} & \code{PipelineFinhubStreamingData} \\[4pt]
+\textbf{Technologies} & Python, Kafka, MinIO (S3), Airflow, dbt, Docker \\[4pt]
+\textbf{Date} & Juin 2026 \\
+\end{tabular}
+
+\vfill
+{\small\color{gris} Rapport technique de conception et de réalisation}
+\end{titlepage}
+
+% ------------------------------------------------------------------
+\tableofcontents
+\newpage
+
+% ==================================================================
+\section{Introduction}
+% ==================================================================
+
+\subsection{Contexte et objectif}
+
+Ce projet consiste à concevoir une \textbf{pipeline de données en temps réel}
+exploitant les données du marché boursier. L'objectif est de récupérer des
+données financières en direct, de les traiter par couches successives, puis de
+les mettre à disposition pour des analyses fiables et reproductibles.
+
+La chaîne de traitement va du \emph{streaming} temps réel jusqu'à la
+modélisation analytique, en respectant les bonnes pratiques d'ingénierie de
+données : séparation des responsabilités, couches de qualité croissante
+(\emph{medallion architecture}), orchestration et conteneurisation.
+
+\subsection{Vue d'ensemble du flux}
+
+\begin{center}
+\fbox{\parbox{0.9\linewidth}{\centering\ttfamily\small
+Finnhub API (WebSocket) \\
+$\downarrow$ \\
+Kafka (topics par type d'événement) \\
+$\downarrow$ \\
+S3 / MinIO -- couche Bronze (brut) \\
+$\downarrow$ \\
+Couche Silver (nettoyé, typé) \\
+$\downarrow$ \\
+Couche Gold (métriques business) \\
+$\downarrow$ \\
+dbt / DuckDB (modèles analytiques) \\
+}}
+\end{center}
+
+\subsection{Synthèse des étapes}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabularx}{\linewidth}{@{}clX@{}}
+\toprule
+\textbf{\#} & \textbf{Étape} & \textbf{Livrable principal} \\
+\midrule
+1 & Ingestion \& Streaming & Client Finnhub WebSocket $\rightarrow$ producteur Kafka \\
+2 & Stockage (Data Lake)   & Consumers $\rightarrow$ Bronze ; transformations Silver et Gold \\
+3 & Orchestration          & DAG Apache Airflow (traitement batch) \\
+4 & Modélisation           & Modèles dbt (fait, dimension, agrégats) sur DuckDB \\
+5 & Infrastructure         & Conteneurisation Docker et orchestration des stacks \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+% ==================================================================
+\section{Architecture générale}
+% ==================================================================
+
+\subsection{Principes retenus}
+
+\begin{itemize}
+  \item \textbf{Découplage} : la source (Finnhub) et les consommateurs sont
+        découplés par Kafka, qui sert de tampon et de point de distribution.
+  \item \textbf{Architecture medallion} : trois couches de qualité croissante
+        (Bronze $\rightarrow$ Silver $\rightarrow$ Gold) dans le data lake.
+  \item \textbf{Streaming vs batch} : l'ingestion est un processus continu ;
+        les transformations et la modélisation sont orchestrées en batch.
+  \item \textbf{Configuration centralisée} : tous les paramètres sensibles
+        passent par un fichier \code{.env} (jamais versionné).
+\end{itemize}
+
+\subsection{Arborescence du projet}
+
+\begin{lstlisting}
+finHubPipeline/
+|-- ingestion/          # Finnhub -> Kafka (producteur)
+|   |-- finnhub_client.py
+|   |-- producer.py
+|   |-- config.py
+|   |-- run_ingestion.py
+|   `-- schemas/        # contrats JSON (trades, quotes, candles)
+|-- kafka/              # stack Kafka (KRaft) + creation des topics
+|-- consumers/          # Kafka -> S3 Bronze
+|   |-- consumer_trades.py / quotes / candles
+|   `-- utils.py
+|-- transformations/
+|   |-- silver/         # nettoyage -> Parquet typé
+|   `-- gold/           # metriques (VWAP, volatilite, ...)
+|-- airflow/            # DAG d'orchestration + stack Airflow
+|-- warehouse/dbt/      # modeles dbt (DuckDB)
+|-- infra/              # Dockerfile + MinIO + services conteneurises
+|-- Makefile            # orchestration de toute l'infra
+`-- pyproject.toml      # dependances (uv)
+\end{lstlisting}
+
+\subsection{Pile technologique}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabularx}{\linewidth}{@{}lX@{}}
+\toprule
+\textbf{Composant} & \textbf{Rôle} \\
+\midrule
+Python ($\geq$ 3.14) + uv & Langage et gestionnaire de dépendances \\
+\code{finnhub-python}, \code{websocket-client} & Connexion à la source de données \\
+\code{kafka-python} & Production et consommation Kafka \\
+Apache Kafka (KRaft) & Bus de streaming (sans ZooKeeper) \\
+MinIO + \code{boto3} & Data lake compatible S3 \\
+\code{pandas}, \code{pyarrow} & Transformations Silver / Gold (Parquet) \\
+Apache Airflow & Orchestration du flux batch \\
+dbt + DuckDB & Modélisation analytique \\
+Docker / Docker Compose & Conteneurisation et déploiement \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+% ==================================================================
+\section{Étape 1 — Ingestion \& Streaming}
+% ==================================================================
+
+\subsection{Source de données : Finnhub}
+
+Les données proviennent de l'API \textbf{Finnhub}. Trois types d'événements
+sont modélisés dans le projet : \emph{trades} (transactions), \emph{quotes}
+(bid/ask) et \emph{candles} (OHLC). Sur le plan gratuit, seul le flux
+\emph{trade} est diffusé en temps réel via WebSocket ; les quotes et candles
+temps réel relèvent d'un abonnement payant. La pipeline alimente donc
+concrètement le flux des trades, les autres topics restant prêts à l'emploi.
+
+\subsection{Client Finnhub}
+
+Le module \code{ingestion/finnhub\_client.py} expose deux modes d'accès :
+\begin{itemize}
+  \item \textbf{WebSocket} (\code{start\_stream}) : abonnement aux symboles et
+        normalisation de chaque trade en dictionnaire
+        (\code{symbol}, \code{price}, \code{volume}, \code{timestamp},
+        \code{type}). La reconnexion automatique est gérée.
+  \item \textbf{REST} (\code{get\_candles}) : récupération de chandeliers OHLC
+        (endpoint premium), conservé pour un usage futur.
+\end{itemize}
+
+\subsection{Production vers Kafka}
+
+Le producteur \code{ingestion/producer.py} publie chaque événement avec :
+\begin{itemize}
+  \item \textbf{clé} = \code{symbol} : garantit l'ordre des messages d'un même
+        symbole sur une partition ;
+  \item \textbf{valeur} = JSON de l'événement ;
+  \item \textbf{topic} déterminé par le type (\code{stock.trades},
+        \code{stock.quotes}, \code{stock.candles}).
+\end{itemize}
+
+Les réglages de fiabilité retenus sont \code{acks=all} (durabilité),
+\code{retries=3} et \code{linger\_ms=50} (micro-batching pour le débit).
+
+\subsection{Stack Kafka}
+
+Kafka est déployé en \textbf{mode KRaft} (sans ZooKeeper, déprécié), via l'image
+officielle \code{apache/kafka}. Une interface \emph{Kafka UI} permet de
+visualiser topics, partitions et messages. Le script
+\code{kafka/create\_topics.sh} crée les trois topics (3 partitions chacun) de
+manière idempotente.
+
+\subsection{Validation}
+
+L'ingestion a été validée de bout en bout : connexion WebSocket établie,
+trades temps réel reçus puis produits dans \code{stock.trades}. La vérification
+côté broker a confirmé que tous les messages d'un même symbole se retrouvent sur
+la même partition (clé = symbole), validant la garantie d'ordre.
+
+% ==================================================================
+\section{Étape 2 — Stockage (Data Lake)}
+% ==================================================================
+
+\subsection{Couche Bronze — données brutes}
+
+Les consumers (\code{consumers/consumer\_*.py}) consomment les topics Kafka et
+écrivent les messages \textbf{bruts} dans MinIO, sans transformation. Le format
+retenu est \textbf{JSON Lines}, partitionné par date :
+
+\begin{lstlisting}
+s3://datalake/bronze/<dataset>/date=YYYY-MM-DD/<horodatage>.jsonl
+\end{lstlisting}
+
+Le consumer fonctionne par \textbf{micro-batch} (flush dès \code{BATCH\_SIZE}
+messages ou après \code{BATCH\_TIMEOUT\_S} secondes). Les offsets ne sont
+validés qu'\emph{après} écriture réussie dans S3, garantissant une livraison
+\textbf{at-least-once} (pas de perte ; doublons éventuels dédupliqués en Silver).
+
+\subsection{Couche Silver — données nettoyées}
+
+Le module \code{transformations/silver/} lit le Bronze et produit du
+\textbf{Parquet typé} :
+\begin{itemize}
+  \item typage des colonnes (\code{symbol} chaîne, montants flottants,
+        \code{timestamp} entier) ;
+  \item normalisation des horodatages (epoch ms $\rightarrow$ \code{event\_time}
+        en datetime UTC) ;
+  \item suppression des lignes aux champs critiques manquants ;
+  \item déduplication.
+\end{itemize}
+
+\subsection{Couche Gold — métriques business}
+
+Le module \code{transformations/gold/} calcule les agrégats analytiques :
+\begin{itemize}
+  \item \textbf{\code{agg\_stock\_metrics}} (par symbole / jour) :
+        prix moyen, VWAP, volume total, volatilité, rendement journalier ;
+  \item \textbf{\code{agg\_5min}} : agrégats par fenêtre de 5 minutes avec
+        variation en pourcentage ;
+  \item \textbf{\code{features}} : moyenne mobile, rendement, volatilité
+        glissante (orienté apprentissage automatique).
+\end{itemize}
+
+\subsection{Format Bronze : choix de conception}
+
+Le format JSON Lines a été préféré au Parquet pour la couche Bronze afin de
+rester fidèle à la donnée brute (principe \emph{« Bronze = raw »}). La
+conversion en Parquet et le typage interviennent en Silver, conformément à
+l'architecture medallion.
+
+\subsection{Validation}
+
+La chaîne complète a été vérifiée sur données réelles : le flux temps réel
+alimente le Bronze, puis \code{clean\_trades} produit le Silver (par exemple
+343 lignes brutes ramenées à 230 lignes après déduplication, sans valeur nulle
+et avec un typage correct), et la couche Gold génère les tables de métriques.
+
+% ==================================================================
+\section{Étape 3 — Orchestration (Airflow)}
+% ==================================================================
+
+\subsection{Modèle d'orchestration}
+
+Le \emph{streaming} Finnhub $\rightarrow$ Kafka est un processus continu, qui
+tourne \textbf{hors Airflow}. Airflow orchestre le traitement \textbf{batch
+périodique}, ce qui correspond à son modèle d'exécution. Le DAG
+\code{stock\_pipeline} s'exécute selon une planification horaire
+(\code{@hourly}).
+
+\subsection{Tâches du DAG}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabularx}{\linewidth}{@{}lX@{}}
+\toprule
+\textbf{Tâche} & \textbf{Action} \\
+\midrule
+\code{consume\_to\_s3}   & Draine les topics Kafka vers la couche Bronze (mode batch) \\
+\code{transform\_silver} & Bronze $\rightarrow$ Silver (nettoyage, Parquet) \\
+\code{transform\_gold}   & Silver $\rightarrow$ Gold (métriques) \\
+\code{dbt\_build}        & Exécute \code{dbt run} puis \code{dbt test} \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+Les dépendances sont strictement séquentielles :
+\[
+\texttt{consume\_to\_s3} \rightarrow \texttt{transform\_silver}
+\rightarrow \texttt{transform\_gold} \rightarrow \texttt{dbt\_build}
+\]
+
+\subsection{Adaptation du consumer}
+
+Pour le mode batch, un paramètre \code{run\_once} a été ajouté au consumer : il
+draine les messages disponibles puis s'arrête, au lieu de boucler
+indéfiniment. Un \code{poll()} initial force l'assignation des partitions afin
+d'éviter les erreurs de rééquilibrage en exécution courte.
+
+\subsection{Déploiement}
+
+Airflow est déployé avec l'exécuteur \code{LocalExecutor} et une base de
+métadonnées PostgreSQL. Le code du projet est monté dans le conteneur et les
+dépendances installées dans l'image. L'interface est accessible sur le port
+local~8082.
+
+\subsection{Validation}
+
+Le DAG a été chargé sans erreur d'import et chaque tâche exécutée individuellement
+contre l'infrastructure réelle : drainage de plus d'un millier de messages vers
+le Bronze, transformation Silver et Gold, puis exécution dbt — l'ensemble de la
+chaîne s'est déroulé avec succès.
+
+% ==================================================================
+\section{Étape 4 — Modélisation analytique (dbt)}
+% ==================================================================
+
+\subsection{Choix de l'entrepôt : DuckDB}
+
+L'architecture cible mentionne Snowflake, un entrepôt cloud payant. Pour
+permettre une exécution réelle, gratuite et locale, le projet utilise
+\textbf{DuckDB} via l'adaptateur \code{dbt-duckdb}. DuckDB lit directement les
+fichiers Parquet de la couche Silver depuis MinIO grâce à l'extension
+\code{httpfs} (API S3). Les modèles SQL restent identiques à ceux qu'on
+écrirait pour Snowflake ; seul l'adaptateur change.
+
+\subsection{Modèles}
+
+\begin{center}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabularx}{\linewidth}{@{}llX@{}}
+\toprule
+\textbf{Modèle} & \textbf{Type} & \textbf{Contenu} \\
+\midrule
+\code{stg\_trades}        & vue   & Staging des trades Silver (typé) \\
+\code{fact\_trades}       & table & Fait : un enregistrement par trade \\
+\code{dim\_symbol}        & table & Dimension symbole (un par ticker) \\
+\code{agg\_stock\_metrics}& table & Métriques par symbole / jour \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+La table \code{agg\_stock\_metrics} reproduit en SQL les métriques de la couche
+Gold (VWAP, volatilité, rendement journalier). Les colonnes
+\code{sector} et \code{company\_name} de \code{dim\_symbol} sont présentes par
+conformité au schéma, mais nulles : ces métadonnées ne sont pas fournies par le
+plan gratuit Finnhub.
+
+\subsection{Tests}
+
+Des tests dbt (\code{not\_null}, \code{unique}) valident l'intégrité des
+modèles : non-nullité des clés et des mesures critiques, unicité du symbole dans
+la dimension.
+
+\subsection{Isolation de l'environnement}
+
+\code{dbt-core} ne prenant pas encore en charge Python~3.14 (version du projet),
+dbt est isolé dans un environnement virtuel Python~3.12 dédié pour l'usage
+local. Pour l'orchestration, \code{dbt-duckdb} est installé directement dans
+l'image Airflow et invoqué via \code{python -m dbt.cli.main}.
+
+\subsection{Validation}
+
+L'exécution a été réalisée en conditions réelles : \code{dbt run} matérialise
+les quatre modèles et \code{dbt test} exécute onze tests, tous au vert, sur les
+données issues de la couche Silver. La même exécution a été reproduite avec
+succès depuis Airflow (tâche \code{dbt\_build}).
+
+% ==================================================================
+\section{Étape 5 — Infrastructure (Docker)}
+% ==================================================================
+
+\subsection{Image du projet}
+
+Le fichier \code{infra/Dockerfile} construit l'image \code{finhub-pipeline}
+(Python~3.14 + uv) embarquant les modules \code{ingestion}, \code{consumers} et
+\code{transformations}. Elle sert à la fois au producteur et aux consumers.
+
+\subsection{Organisation des stacks}
+
+L'infrastructure est répartie en trois stacks Docker Compose, orchestrées par un
+\code{Makefile} à la racine :
+
+\begin{center}
+\renewcommand{\arraystretch}{1.25}
+\begin{tabularx}{\linewidth}{@{}lX@{}}
+\toprule
+\textbf{Stack} & \textbf{Services} \\
+\midrule
+\code{kafka/}   & Kafka (KRaft) + Kafka UI \\
+\code{infra/}   & MinIO + producteur + consumer conteneurisés \\
+\code{airflow/} & Airflow (webserver, scheduler) + PostgreSQL \\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+Le \code{Makefile} fournit des cibles simples : \code{make up} (démarre tout),
+\code{make down}, \code{make ps}, \code{make topics}, \code{make logs}.
+
+\subsection{Réseaux}
+
+Les services communiquent par les réseaux Docker partagés en utilisant les
+listeners internes (\code{kafka:29092}, \code{minio:9000}), ce qui est plus
+fiable que de passer par la passerelle de l'hôte.
+
+\subsection{Validation et limite rencontrée}
+
+L'image a été construite et les conteneurs (producteur, consumer) démarrent et
+se connectent correctement à Kafka et MinIO via les réseaux internes. La seule
+limite observée est liée à l'environnement de test : la saturation du disque
+hôte a déclenché un refus d'écriture de MinIO (\code{XMinioStorageFull}). Il
+s'agit d'une contrainte matérielle de l'environnement et non d'un défaut de la
+pipeline.
+
+% ==================================================================
+\section{Démarche d'ingénierie}
+% ==================================================================
+
+\subsection{Gestion de version}
+
+Le projet suit un modèle de branches \code{main} / \code{dev} / \code{feature/*}
+et la convention \emph{Conventional Commits} (\code{feat}, \code{fix},
+\code{chore}, \code{docs}\dots). Chaque étape a été développée sur sa branche,
+intégrée dans \code{dev}, puis fusionnée dans \code{main}.
+
+\subsection{Sécurité}
+
+Le fichier \code{.env} contenant la clé API a été retiré du suivi Git et un
+\code{.env.example} sans secret le documente. Un \code{.gitignore} exclut les
+artefacts de runtime (environnements virtuels, journaux, bases locales,
+données).
+
+\subsection{Validation systématique}
+
+Chaque étape a été vérifiée par une exécution réelle (et non seulement par
+analyse du code) : flux de données effectif, objets écrits dans le data lake,
+tâches Airflow exécutées, tests dbt au vert. Les difficultés rencontrées
+(permissions Docker, résolution réseau Kafka, rééquilibrage de consumer,
+compatibilité de versions) ont été diagnostiquées jusqu'à leur cause racine et
+documentées.
+
+% ==================================================================
+\section{Limites et perspectives}
+% ==================================================================
+
+\subsection{Limites actuelles}
+
+\begin{itemize}
+  \item \textbf{Plan Finnhub gratuit} : seul le flux \emph{trade} est diffusé en
+        temps réel ; quotes et candles temps réel nécessitent un abonnement.
+  \item \textbf{Métadonnées symboles} : secteur et nom de société absents (non
+        fournis par le plan gratuit).
+  \item \textbf{Entrepôt} : DuckDB local remplace Snowflake pour rester gratuit ;
+        le code SQL reste néanmoins portable.
+  \item \textbf{Environnement de test} : saturation disque limitant les essais
+        de bout en bout conteneurisés.
+\end{itemize}
+
+\subsection{Améliorations envisageables}
+
+\begin{itemize}
+  \item Schema Registry et format Avro pour le contrat des messages.
+  \item Traitement de flux (Kafka Streams, Spark Streaming).
+  \item Qualité de données automatisée (Great Expectations).
+  \item Supervision (Prometheus, Grafana).
+  \item Intégration et déploiement continus (CI/CD via GitHub Actions).
+  \item Bascule vers un entrepôt cloud (Snowflake) en réutilisant les modèles dbt.
+\end{itemize}
+
+% ==================================================================
+\section{Conclusion}
+% ==================================================================
+
+Le projet met en œuvre une pipeline de données \textbf{complète et fonctionnelle},
+du streaming temps réel jusqu'à la modélisation analytique. Les cinq étapes ont
+été réalisées et validées : ingestion Finnhub vers Kafka, stockage en data lake
+structuré en trois couches, orchestration par Airflow, modélisation dbt, et
+conteneurisation Docker.
+
+Au-delà de la simple réalisation, la démarche a privilégié la \textbf{rigueur
+d'ingénierie} : décisions de conception explicites et justifiées, validation par
+exécution réelle à chaque étape, gestion de version structurée et documentation
+systématique. L'architecture obtenue est modulaire et extensible, prête à
+accueillir les améliorations envisagées (qualité de données, supervision,
+entrepôt cloud).
+
+\end{document}

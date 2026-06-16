@@ -90,3 +90,9 @@
 - Étape 3 : Airflow
 - Étape 4 : Snowflake + dbt
 - Étape 5 : Docker (infra globale)
+
+## Extra — Dashboard BI (branche feature/dashboard-bi)
+- [x] dashboard/app.py : Streamlit + Plotly sur DuckDB (read-only, modèles dbt)
+- [x] KPIs + barres + courbe prix + tableau + filtre symbole
+- [x] Validé : serveur Streamlit HTTP 200, requêtes OK sur données réelles
+- [x] Rapport LaTeX + prompts illustrations (rapport/)
