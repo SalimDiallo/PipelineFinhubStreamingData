@@ -37,3 +37,12 @@ warehouse/dbt/.user.yml
 
 # IDE
 .vscode/
+
+# LaTeX (artefacts de compilation)
+rapport/*.aux
+rapport/*.fdb_latexmk
+rapport/*.fls
+rapport/*.log
+rapport/*.out
+rapport/*.toc
+rapport/*.synctex.gz
