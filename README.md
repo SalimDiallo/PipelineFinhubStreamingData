@@ -1,218 +1,107 @@
-# 🚀 Pipeline de données en temps réel
+# FinHub Streaming Data Pipeline
 
-## 🎯 Objectif
-
-Concevoir une pipeline de données en temps réel pour exploiter des données du marché boursier, depuis l’ingestion jusqu’à la mise à disposition dans un data warehouse pour analyse.
-
----
-
-## 🧩 1. Ingestion & Streaming
-
-### Source : Finnhub API
-
-### Données récupérées
-
-#### Trades (transactions en temps réel)
-
-```json
-{
-  "symbol": "AAPL",
-  "price": 189.23,
-  "volume": 100,
-  "timestamp": 1710001234
-}
-```
-
-#### Quotes (bid/ask)
-
-```json
-{
-  "symbol": "AAPL",
-  "bid": 189.2,
-  "ask": 189.25,
-  "bidSize": 500,
-  "askSize": 400,
-  "timestamp": 1710001234
-}
-```
-
-#### Candles (OHLC)
-
-```json
-{
-  "symbol": "AAPL",
-  "open": 188.5,
-  "high": 190.0,
-  "low": 187.8,
-  "close": 189.2,
-  "volume": 1500000,
-  "timestamp": 1710001200
-}
-```
-
-### Streaming avec Kafka
-
-**Topics :**
-
-- `stock.trades`
-- `stock.quotes`
-- `stock.candles`
-
-**Key :**
-
-- `symbol`
-
-**Value :**
-
-- JSON brut provenant de l’API
-
----
-
-## 🪵 2. Data Lake (S3 / MinIO)
-
-### Architecture : Bronze → Silver → Gold
-
-### 🟤 Bronze (Raw)
-
-- Données brutes depuis Kafka
-- Aucun traitement
-
-**Structure :**
+Pipeline de donnees en temps reel exploitant les donnees du marche boursier, de
+l'ingestion jusqu'a la modelisation analytique et la restitution.
 
 ```
-/bronze/trades/date=YYYY-MM-DD/
-/bronze/quotes/date=YYYY-MM-DD/
+Finnhub API  -->  Kafka  -->  Data Lake (Bronze / Silver / Gold)  -->  dbt  -->  Dashboard BI
 ```
 
-**Format :**
+## Architecture
 
-- JSON / Parquet
+| Etape | Composant | Role |
+| --- | --- | --- |
+| 1 | Ingestion | Client Finnhub WebSocket vers producteur Kafka |
+| 2 | Stockage | Consumers vers Bronze ; transformations Silver et Gold |
+| 3 | Orchestration | DAG Apache Airflow (traitement batch) |
+| 4 | Modelisation | Modeles dbt (fait, dimension, agregats) sur DuckDB |
+| 5 | Infrastructure | Conteneurisation Docker et orchestration des stacks |
+| - | Restitution | Dashboard BI (Streamlit) |
 
----
-
-### ⚪ Silver (Clean)
-
-**Transformations :**
-
-- Suppression des doublons
-- Normalisation des timestamps
-- Typage des colonnes
-- Gestion des valeurs nulles
-
-**Exemple :**
-
-| symbol | price | volume | timestamp           |
-| ------ | ----- | ------ | ------------------- |
-| AAPL   | 189.2 | 100    | 2026-06-15 10:00:00 |
-
----
-
-### 🟡 Gold (Business-ready)
-
-**Données enrichies :**
-
-- Moyennes mobiles
-- Volume agrégé
-- Variation %
-
-**Exemple :**
-
-| symbol | avg_price_5min | volume_5min | pct_change |
-| ------ | -------------- | ----------- | ---------- |
-
----
-
-## ⚙️ 3. Orchestration (Airflow)
-
-### DAG global
+## Arborescence
 
 ```
-Fetch API → Kafka → S3 Bronze
-→ Silver → Gold → Snowflake
+finHubPipeline/
+|-- ingestion/          # Finnhub -> Kafka
+|-- kafka/              # stack Kafka (KRaft) + creation des topics
+|-- consumers/          # Kafka -> Bronze
+|-- transformations/
+|   |-- silver/         # nettoyage -> Parquet type
+|   `-- gold/           # metriques (VWAP, volatilite, ...)
+|-- airflow/            # DAG d'orchestration + stack Airflow
+|-- warehouse/dbt/      # modeles dbt (DuckDB)
+|-- infra/              # Dockerfile + MinIO + services conteneurises
+|-- dashboard/          # tableau de bord BI (Streamlit)
+|-- rapport/            # rapport technique (LaTeX) + prompts d'illustrations
+|-- Makefile            # orchestration de toute l'infra
+`-- pyproject.toml      # dependances (uv)
 ```
 
-### Tasks :
+Chaque dossier contient son propre README detaille.
 
-- `fetch_stock_data`
-- `produce_to_kafka`
-- `consume_to_s3`
-- `transform_silver`
-- `transform_gold`
-- `load_snowflake`
+## Pile technologique
 
----
+Python (>= 3.14), uv, Apache Kafka (KRaft), MinIO (S3), pandas / pyarrow,
+Apache Airflow, dbt + DuckDB, Streamlit / Plotly, Docker.
 
-## 🧠 4. Transformation & Modélisation
+## Demarrage rapide
 
-### Data Warehouse : Snowflake
+### 1. Configuration
 
-### Modélisation avec dbt
-
-#### Table de faits : `fact_trades`
-
-| symbol | timestamp | price | volume |
-
----
-
-#### Dimension : `dim_symbol`
-
-| symbol | sector | company_name |
-
----
-
-#### Table analytique : `agg_stock_metrics`
-
-| symbol | date | avg_price | total_volume | volatility |
-
----
-
-### Métriques calculées :
-
-- VWAP (Volume Weighted Average Price)
-- Moving Average
-- Volatility
-- Daily Return
-
----
-
-## 🐳 5. Infrastructure (Docker)
-
-### Services conteneurisés :
-
-- Kafka + Zookeeper
-- Airflow
-- MinIO
-- dbt
-- Producteurs / consommateurs Python
-
----
-
-## 🔄 Flux global
-
-```
-Finnhub API
-   ↓
-Kafka
-   ↓
-S3 Bronze
-   ↓
-S3 Silver
-   ↓
-S3 Gold
-   ↓
-Snowflake
-   ↓
-BI / Dashboard / ML
+```bash
+cp .env.example .env
+# renseigner FINNHUB_API_KEY dans .env
 ```
 
----
+### 2. Infrastructure
 
-## 💡 Améliorations possibles
+```bash
+make up        # Kafka + topics + MinIO + producer/consumer + Airflow
+make ps        # etat des conteneurs
+```
 
-- Schema Registry (Avro)
-- Kafka Streams / Spark Streaming
-- Data Quality (Great Expectations)
-- Monitoring (Prometheus, Grafana)
-- CI/CD (GitHub Actions)
+### 3. Traitement
 
----
+Le streaming Finnhub vers Kafka alimente le data lake en continu. Le DAG Airflow
+`stock_pipeline` (planifie @hourly) enchaine ensuite :
+
+```
+consume_to_s3 -> transform_silver -> transform_gold -> dbt_build
+```
+
+Interface Airflow : http://localhost:8082 (airflow / airflow).
+
+### 4. Dashboard
+
+```bash
+make dashboard     # http://localhost:8501
+```
+
+## Endpoints
+
+| Service | URL | Identifiants |
+| --- | --- | --- |
+| Kafka UI | http://localhost:8080 | - |
+| MinIO Console | http://localhost:9001 | minioadmin / minioadmin |
+| Airflow | http://localhost:8082 | airflow / airflow |
+| Dashboard BI | http://localhost:8501 | - |
+
+## Couches du data lake
+
+- Bronze : donnees brutes (JSON Lines), partitionnees par date.
+- Silver : donnees nettoyees et typees (Parquet) ; deduplication, normalisation
+  des timestamps, gestion des nulls.
+- Gold : metriques business (VWAP, volatilite, rendement, volume agrege).
+
+## Documentation
+
+- `rapport/rapport.tex` : rapport technique complet du projet.
+- READMEs par section : `ingestion/`, `kafka/`, `consumers/`,
+  `transformations/silver/`, `transformations/gold/`, `airflow/`,
+  `warehouse/dbt/`, `infra/`, `dashboard/`.
+
+## Limites connues
+
+- Plan Finnhub gratuit : seul le flux des trades est diffuse en temps reel.
+- DuckDB local remplace Snowflake (payant) ; les modeles SQL restent portables.
+- dbt est isole dans un environnement Python 3.12 (incompatibilite Python 3.14).
