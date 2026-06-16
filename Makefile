@@ -11,12 +11,13 @@
 #   make ps        # état des conteneurs
 #   make topics    # crée les topics Kafka
 #   make logs      # logs du producteur
+#   make dashboard # lance le dashboard BI (Streamlit)
 
 KAFKA   = docker compose -f kafka/docker-compose.yml
 INFRA   = docker compose -f infra/docker-compose.yml
 AIRFLOW = docker compose -f airflow/docker-compose.yml
 
-.PHONY: up down ps topics logs kafka infra airflow airflow-init clean
+.PHONY: up down ps topics logs kafka infra airflow airflow-init dashboard clean
 
 ## Démarre toute l'infra (ordre : kafka -> minio/producer/consumer -> airflow)
 up: kafka topics infra airflow
@@ -35,6 +36,10 @@ airflow-init:
 
 airflow:
 	$(AIRFLOW) up -d
+
+## Démarre le dashboard BI (Streamlit -> http://localhost:8501)
+dashboard:
+	uv run streamlit run dashboard/app.py
 
 ## Arrête toute l'infra
 down:
